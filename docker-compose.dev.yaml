@@ -1,0 +1,22 @@
+# Дев-режим: исходники монтируются в контейнер, uvicorn перезапускается на изменения.
+# Запуск: docker compose -f docker-compose.yaml -f docker-compose.dev.yaml up -d
+services:
+
+  app:
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir app
+
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+
+    volumes:
+      - .:/app
+      - certs:/certs:ro
+
+  migrations:
+    volumes:
+      - .:/app
+
+  worker:
+    volumes:
+      - .:/app

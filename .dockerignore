@@ -1,0 +1,46 @@
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Environment variables / secrets
+.env
+.env.*
+!.env.example
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.idea/
+.vscode/
+
+# Tests / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Build / distribution
+build/
+dist/
+*.egg-info/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Docker
+Dockerfile
+docker-compose*.yml
+
+# Documentation
+README.md

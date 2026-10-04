@@ -1,0 +1,434 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Search Service API",
+    "description": "Сервис поиска по текстам документов.\n\nДокументы хранятся в PostgreSQL, полнотекстовый поиск выполняется по индексу Elasticsearch. Хранилища синхронизируются через паттерн **outbox**: API пишет данные и событие изменения в одной транзакции PostgreSQL, а отдельный воркер переносит события в Elasticsearch. Если Elasticsearch недоступен, события остаются в БД и применяются позже.\n\nЭндпоинты:\n* `POST /api/v1/posts/import` — импорт документов из файла .xlsx или .csv;\n* `GET /api/v1/posts/search` — поиск по тексту, до 20 документов;\n* `DELETE /api/v1/posts/{post_id}` — удаление документа из БД и индекса;\n* `GET /health` — проверка работоспособности сервиса.",
+    "version": "0.1.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8000",
+      "description": "Локальный запуск через docker compose"
+    }
+  ],
+  "paths": {
+    "/api/v1/posts/import": {
+      "post": {
+        "tags": [
+          "Посты"
+        ],
+        "summary": "Импорт постов",
+        "description": "Импортирует посты из файла `.xlsx` или `.csv` с колонками `text`, `created_date` (`ДД.ММ.ГГГГ ЧЧ:ММ`) и `rubrics` (список строк, например `['python']`). Для .csv поддерживаются UTF-8 и cp1251, разделитель `,` или `;` определяется по строке заголовка.\n\nПосты и события outbox сохраняются в PostgreSQL одной транзакцией, индексацию в Elasticsearch воркер выполняет асинхронно.",
+        "operationId": "import_posts_api_v1_posts_import_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_import_posts_api_v1_posts_import_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Посты импортированы",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportResponse"
+                },
+                "example": {
+                  "detail": "Посты успешно импортированы",
+                  "count": 2
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Неподдерживаемое расширение файла",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                },
+                "example": {
+                  "detail": "Поддерживается только .xlsx и .csv"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Ошибка при импорте",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                },
+                "example": {
+                  "detail": "Ошибка при импорте"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/posts/search": {
+      "get": {
+        "tags": [
+          "Посты"
+        ],
+        "summary": "Поиск постов",
+        "description": "Ищет документы по текстовому запросу в Elasticsearch и возвращает до 20 постов со всеми полями БД, упорядоченных по убыванию даты создания. Если совпадений нет, возвращается пустой массив.",
+        "operationId": "search_posts_api_v1_posts_search_get",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Произвольный текстовый запрос",
+              "title": "Query"
+            },
+            "description": "Произвольный текстовый запрос"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Найденные посты (до 20, по убыванию даты создания)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PostResponse"
+                  },
+                  "title": "Response Search Posts Api V1 Posts Search Get"
+                },
+                "example": [
+                  {
+                    "id": 2,
+                    "rubrics": [
+                      "fastapi"
+                    ],
+                    "text": "Post about FastAPI",
+                    "created_date": "2026-10-02T10:00:00"
+                  },
+                  {
+                    "id": 1,
+                    "rubrics": [
+                      "python"
+                    ],
+                    "text": "Post about Python",
+                    "created_date": "2026-10-01T10:00:00"
+                  }
+                ]
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/posts/{post_id}": {
+      "delete": {
+        "tags": [
+          "Посты"
+        ],
+        "summary": "Удаление поста",
+        "description": "Удаляет пост из PostgreSQL и ставит его удаление из индекса Elasticsearch в outbox одной транзакцией; из индекса документ убирает воркер.",
+        "operationId": "delete_post_api_v1_posts__post_id__delete",
+        "parameters": [
+          {
+            "name": "post_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "description": "Идентификатор поста",
+              "title": "Post Id"
+            },
+            "description": "Идентификатор поста"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Пост удалён",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteResponse"
+                },
+                "example": {
+                  "detail": "Пост удалён"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Пост не найден",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "Пост не найден"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Ошибка при удалении",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "Ошибка при удалении"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "Служебное"
+        ],
+        "summary": "Проверка работоспособности",
+        "description": "Возвращает статус работоспособности сервиса.",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Сервис работает",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                },
+                "example": {
+                  "status": "ok"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Body_import_posts_api_v1_posts_import_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "description": "Файл .xlsx или .csv"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_import_posts_api_v1_posts_import_post"
+      },
+      "DeleteResponse": {
+        "properties": {
+          "detail": {
+            "type": "string",
+            "title": "Detail",
+            "description": "Результат удаления"
+          }
+        },
+        "type": "object",
+        "required": [
+          "detail"
+        ],
+        "title": "DeleteResponse"
+      },
+      "Detail": {
+        "properties": {
+          "detail": {
+            "type": "string",
+            "title": "Detail",
+            "description": "Текст ошибки"
+          }
+        },
+        "type": "object",
+        "required": [
+          "detail"
+        ],
+        "title": "Detail"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HealthResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Статус сервиса"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "HealthResponse"
+      },
+      "ImportResponse": {
+        "properties": {
+          "detail": {
+            "type": "string",
+            "title": "Detail",
+            "description": "Результат импорта"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count",
+            "description": "Количество импортированных постов"
+          }
+        },
+        "type": "object",
+        "required": [
+          "detail",
+          "count"
+        ],
+        "title": "ImportResponse"
+      },
+      "PostResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id",
+            "description": "Идентификатор документа"
+          },
+          "rubrics": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Rubrics",
+            "description": "Массив рубрик документа"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text",
+            "description": "Текст документа"
+          },
+          "created_date": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created Date",
+            "description": "Дата создания документа"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "rubrics",
+          "text",
+          "created_date"
+        ],
+        "title": "PostResponse"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Посты",
+      "description": "Импорт, поиск и удаление документов."
+    },
+    {
+      "name": "Служебное",
+      "description": "Проверка работоспособности сервиса."
+    }
+  ]
+}
