@@ -14,7 +14,7 @@
 
 ## Запуск
 
-Требуется Docker с Compose v2 и ~4 ГБ свободной памяти. Конфигурация берётся из `.env`, пример — в `.env.example`: обязательны пароли `ELASTIC_PASSWORD` и `DB_PASSWORD`, а также `STACK_VERSION` — версия образа Elasticsearch, значения по умолчанию у неё нет.
+Требуется Docker с Compose v2 и ~4 ГБ свободной памяти. Конфигурация берётся из `.env`, пример — в `.env.example`: обязательны пароли `ELASTIC_PASSWORD` и `DB_PASSWORD`, а также `STACK_VERSION` — версия образа Elasticsearch.
 
 ```bash
 cp .env.example .env
