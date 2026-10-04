@@ -2,13 +2,6 @@
 
 from app.schemas.common import Detail
 
-SERVERS = [
-    {
-        "url": "http://localhost:8000",
-        "description": "Локальный запуск через docker compose",
-    }
-]
-
 TAGS = [
     {"name": "Посты", "description": "Импорт, поиск и удаление документов."},
     {"name": "Служебное", "description": "Проверка работоспособности сервиса."},

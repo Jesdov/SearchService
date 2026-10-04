@@ -5,12 +5,6 @@
     "description": "Сервис поиска по текстам документов.\n\nДокументы хранятся в PostgreSQL, полнотекстовый поиск выполняется по индексу Elasticsearch. Хранилища синхронизируются через паттерн **outbox**: API пишет данные и событие изменения в одной транзакции PostgreSQL, а отдельный воркер переносит события в Elasticsearch. Если Elasticsearch недоступен, события остаются в БД и применяются позже.\n\nЭндпоинты:\n* `POST /api/v1/posts/import` — импорт документов из файла .xlsx или .csv;\n* `GET /api/v1/posts/search` — поиск по тексту, до 20 документов;\n* `DELETE /api/v1/posts/{post_id}` — удаление документа из БД и индекса;\n* `GET /health` — проверка работоспособности сервиса.",
     "version": "0.1.0"
   },
-  "servers": [
-    {
-      "url": "http://localhost:8000",
-      "description": "Локальный запуск через docker compose"
-    }
-  ],
   "paths": {
     "/api/v1/posts/import": {
       "post": {

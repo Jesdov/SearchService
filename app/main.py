@@ -27,7 +27,6 @@ def create_app() -> FastAPI:
         docs_url="/docs",
         redoc_url="/redoc",
         openapi_url="/openapi.json",
-        servers=docs.SERVERS,
         openapi_tags=docs.TAGS,
         lifespan=lifespan,
     )
